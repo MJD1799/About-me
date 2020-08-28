@@ -1,0 +1,51 @@
+*** Trigger ***
+
+1)
+create or replace view selected_students as select studentid,studentname,progname,cpi,emailid,contactno,yr,companyname,profilename,mincpi,ctc from (((student natural join selected) join offers on(cid=companyid and pid=profileid)) natural join company) natural join jobprofile;
+
+create trigger selected_students_view
+instead of insert on selected_students
+for each row execute procedure trig_fun_sstud();
+
+create or replace function trig_fun_sstud() returns trigger as $$
+declare
+   flg1 integer;flg2 char(10);c1 integer;c2 integer;pid character(10);
+   --cur refcursor;
+begin
+	insert into student values (new.studentid,new.studentname,new.emailid,new.contactno,new.cpi,new.progname,new.yr);
+	flg1 :=-1;
+	flg2 :='NA';
+	select companyid into flg1 from company where companyname=new.companyname;
+	select profileid into flg2 from jobprofile where profilename=new.profilename;
+	raise notice 'f1:%',flg1;
+	raise notice 'f2:%',flg2;
+	if flg1 is null or flg2 is null then
+	raise notice 'c1:%',c1;
+		if flg1 is null then
+		    select count(*) into c1 from company; 
+			raise notice 'c1:%',c1;
+			insert into company values(c1+1,new.companyname);
+		end if;
+		if flg2 is null then
+			select count(*)+1 into c2 from jobprofile;
+			pid:='p' || cast(c2 as character(10));
+			insert into jobprofile values(pid,new.profilename);
+			raise notice 'c2:%',c2;
+			raise notice 'pid:%',pid;
+		end if;
+		if c1 is null then
+			select companyid into c1 from company where companyname=new.companyname;
+		end if;
+		if pid is null then
+			select profileid into pid from jobprofile where profilename=new.profilename;
+		end if;
+		insert into offers values(c1+1,pid,new.mincpi,new.ctc);
+		insert into selected values(new.studentid,c1+1,pid);
+	end if;
+	if flg1 is not null and flg2 is not null then
+	update offers set mincpi=new.mincpi,ctc=new.ctc where (companyid=flg1 and profileid=flg2);
+	insert into selected values(new.studentid,flg1,flg2);
+	end if;
+	return null;
+	
+end $$ language 'plpgsql';
